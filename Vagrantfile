@@ -12,10 +12,9 @@ Vagrant.configure("2") do |config|
 
   # Every Vagrant development environment requires a box. You can search for
   # boxes at https://vagrantcloud.com/search.
-  config.vm.box = "Debian12"
+  config.vm.box = "debian/bookworm64"
+  config.vm.network "public_network"
   
-  config.vm.network "forwarded_port", guest: 22, host: 2222
-
   # Disable automatic box update checking. If you disable this, then
   # boxes will only be checked for updates when the user runs
   # `vagrant box outdated`. This is not recommended.
@@ -30,7 +29,8 @@ Vagrant.configure("2") do |config|
   # Create a forwarded port mapping which allows access to a specific port
   # within the machine from a port on the host machine and only allow access
   # via 127.0.0.1 to disable public access
-  # config.vm.network "forwarded_port", guest: 80, host: 8080, host_ip: "127.0.0.1"
+  # config.vm.network "forwarded_port", guest: 3000, host: 3000, host_ip: "0.0.0.0"
+  # config.vm.network "forwarded_port", guest: 5006, host: 5006, host_ip: "0.0.0.0"
 
   # Create a private network, which allows host-only access to the machine
   # using a specific IP.
@@ -57,19 +57,37 @@ Vagrant.configure("2") do |config|
 	 vb.gui = true
    vb.name = "Projects"
 
-
-
-  #  disk_path = "budget.vdi"
-  #  unless File.exists?(disk_path)
-  #   vb.customize ["createhd", "--filename", disk_path, "--size", 51200] # Size in MB
-  #   vb.customize ["storageattach", :id, "--storagectl", "SATA", "--port", 1, "--device", 0, "--type", "hdd", "--medium", disk_path]
-  #  end
-
-
   # Customize the amount of memory on the VM:
   vb.memory = "24276"
 	vb.cpus = 8
   end
+
+    # Must run manually since we only need it once
+   config.vm.provision "shell", name: "guest-additions", run: "never", inline: <<-SHELL
+    # Install dependencies
+    KERNEL_VERSION=$(uname -r)
+
+    # Install prerequisites
+    sudo apt-get update
+    sudo apt-get install -y build-essential dkms linux-headers-"$KERNEL_VERSION"
+
+    # Mount the Guest Additions ISO
+    sudo mkdir -p /mnt/vbox
+    sudo mount /dev/cdrom /mnt/vbox || sudo mount /dev/sr0 /mnt/vbox
+
+    # Install
+    sudo sh /mnt/vbox/VBoxLinuxAdditions.run || true
+
+    # Cleanup
+    sudo umount /mnt/vbox
+  SHELL
+
+  # Must run manually since we only need it once
+  config.vm.provision "shell", name: "gui", run: "never", inline: <<-SHELL
+    apt-get update
+    sudo apt-get install -y mate-desktop-environment-core lightdm
+    sudo systemctl set-default graphical.target
+  SHELL
   
   #
   # View the documentation for the provider you are using for more
@@ -83,7 +101,7 @@ Vagrant.configure("2") do |config|
   config.vm.provision "shell", inline: "sudo apt-get update -y"
 
   config.vm.provision "file", source: "./.bashrc", destination: "~/.bashrc"
-  config.vm.provision "file", source: "./git/.gitconfig", destination: "~/.gitconfig"
+  config.vm.provision "file", source: "./.gitconfig", destination: "~/.gitconfig"
 
   config.vm.provision "shell", name:'code', privileged: false, path: './scripts/update-code.sh'
   config.vm.provision "shell", name:'docker', privileged: true, path: './scripts/get-docker.sh'
@@ -100,8 +118,10 @@ Vagrant.configure("2") do |config|
   config.vm.provision "shell", name:"terminal", privileged: false, path: "./scripts/editor.sh"
 
   config.vm.provision "shell", name: "hello-world", privileged: false, inline: <<-SHELL
-    docker run hello-world
+  docker run hello-world
   SHELL
-
+  
+  config.vm.provision "shell", name: "final-reboot", inline: "reboot"
+  
 
 end
